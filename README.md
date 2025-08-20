@@ -44,8 +44,8 @@ You can configure the client in three ways:
 ### Option 1: Environment Variables
 
 ```bash
-export TENANT_ID="your-azure-tenant-id"
-export DATA_AGENT_URL="your-fabric-data-agent-url"
+export TENANT_ID=<your-azure-tenant-id>
+export DATA_AGENT_URL=<your-fabric-data-agent-url>
 ```
 
 ### Option 2: .env File
@@ -53,8 +53,8 @@ export DATA_AGENT_URL="your-fabric-data-agent-url"
 Create a `.env` file in the project directory:
 
 ```env
-TENANT_ID=your-azure-tenant-id
-DATA_AGENT_URL=your-fabric-data-agent-url
+TENANT_ID=<your-azure-tenant-id>
+DATA_AGENT_URL=<your-fabric-data-agent-url>
 ```
 
 ### Option 3: Direct Configuration
@@ -62,8 +62,8 @@ DATA_AGENT_URL=your-fabric-data-agent-url
 Edit the values directly in your script:
 
 ```python
-TENANT_ID = "your-azure-tenant-id"
-DATA_AGENT_URL = "your-fabric-data-agent-url"
+TENANT_ID = "<your-azure-tenant-id>"
+DATA_AGENT_URL = "<your-fabric-data-agent-url>"
 ```
 
 ## Usage
