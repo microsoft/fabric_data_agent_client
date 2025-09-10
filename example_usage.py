@@ -53,11 +53,25 @@ def main():
         print("    (Now extracts raw markdown tables directly from agent responses when available)")
         run_details = client.get_run_details("Show me the top 5 records from any available table")
         
+
+
         if "error" not in run_details:
             print(f"✅ Run Status: {run_details['run_status']}")
             print(f"📊 Steps Count: {len(run_details['run_steps']['data'])}")
             print(f"📝 Messages Count: {len(run_details['messages']['data'])}")
-            
+            print(f"Run steps: {run_details['run_steps']}")
+
+            for step in run_details['run_steps']['data']:
+                tool_name = "N/A"
+                if 'step_details' in step and step['step_details'] and 'tool_calls' in step['step_details']:
+                    tool_calls = step['step_details']['tool_calls']
+                    if tool_calls and len(tool_calls) > 0 and 'function' in tool_calls[0]:
+                        tool_name = tool_calls[0]['function'].get('name', 'N/A')
+                print(f"Step ID: {step.get('id')}, Type: {step.get('type')}, Status: {step.get('status')}, Tool Name: {tool_name}")
+                if 'error' in step:
+                    print(f"  Error: {step['error']}")
+                
+
             # Show the assistant's final response
             messages = run_details.get('messages', {}).get('data', [])
             assistant_messages = [msg for msg in messages if msg.get('role') == 'assistant']
