@@ -6,6 +6,7 @@ This script demonstrates how to use the FabricDataAgentClient to call
 a Fabric Data Agent from outside of the Fabric environment.
 """
 
+import json
 import os
 from fabric_data_agent_client import FabricDataAgentClient
 
@@ -44,9 +45,13 @@ def main():
         print(f"💬 Response: {response}")
         
         # Example 2: Another simple query
-        print("\n📋 Example 2: Table Information Query")
-        response = client.ask("Show me information about the tables in the lakehouse")
+        print("\n📋 Example 2: Raw response")
+        response = client.get_raw_run_response("Show me some of the schema of the tables in the lakehouse")
         print(f"💬 Response: {response}")
+        print(f"\n💬 Response:")
+        print("-" * 50)
+        print(json.dumps(response, indent=2, default=str))
+        print("-" * 50)
         
         # Example 3: Get detailed run information with SQL query extraction
         print("\n📋 Example 3: Detailed Run Analysis with SQL Query Extraction and Raw Markdown Tables")

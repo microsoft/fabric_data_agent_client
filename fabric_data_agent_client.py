@@ -200,10 +200,10 @@ class FabricDataAgentClient:
                 thread_id=thread.id,
                 order="asc"
             )
-            
+
             # Extract assistant responses
             responses = []
-            for msg in messages:
+            for msg in messages.data:
                 if msg.role == "assistant":
                     try:
                         content = msg.content[0]
@@ -381,6 +381,97 @@ class FabricDataAgentClient:
         except Exception as e:
             print(f"❌ Error getting run details: {e}")
             return {"error": str(e)}
+
+    def get_raw_run_response(self, question: str, timeout: int = 120) -> dict:
+        """
+        Ask a question and return the complete raw response including all run details.
+        This is useful when you need to parse or analyze the full response structure.
+        
+        Args:
+            question (str): The question to ask
+            timeout (int): Maximum time to wait for response in seconds
+            
+        Returns:
+            dict: Complete raw response with run steps, messages, and metadata
+        """
+        if not question.strip():
+            raise ValueError("Question cannot be empty")
+        
+        print(f"\n🔍 Getting raw response for: {question}")
+        
+        try:
+            client = self._get_openai_client()
+            
+            # Create assistant and thread
+            assistant = client.beta.assistants.create(model="not used")
+            thread = client.beta.threads.create()
+            
+            # Send the question
+            client.beta.threads.messages.create(
+                thread_id=thread.id,
+                role="user",
+                content=question
+            )
+            
+            # Start the run
+            run = client.beta.threads.runs.create(
+                thread_id=thread.id,
+                assistant_id=assistant.id
+            )
+            
+            # Monitor the run with timeout
+            start_time = time.time()
+            while run.status in ["queued", "in_progress"]:
+                if time.time() - start_time > timeout:
+                    print(f"⏰ Request timed out after {timeout} seconds")
+                    break
+                
+                print(f"⏳ Status: {run.status}")
+                time.sleep(2)
+                
+                run = client.beta.threads.runs.retrieve(
+                    thread_id=thread.id,
+                    run_id=run.id
+                )
+            
+            print(f"✅ Final status: {run.status}")
+            
+            # Get all run details
+            steps = client.beta.threads.runs.steps.list(
+                thread_id=thread.id,
+                run_id=run.id
+            )
+            
+            messages = client.beta.threads.messages.list(
+                thread_id=thread.id,
+                order="asc"
+            )
+            
+            # Clean up resources
+            try:
+                client.beta.threads.delete(thread_id=thread.id)
+            except Exception as cleanup_error:
+                print(f"⚠️ Cleanup warning: {cleanup_error}")
+            
+            # Return complete raw response
+            return {
+                "question": question,
+                "run": run.model_dump(),
+                "steps": steps.model_dump(),
+                "messages": messages.model_dump(),
+                "timestamp": time.time(),
+                "timeout": timeout,
+                "success": run.status == "completed"
+            }
+            
+        except Exception as e:
+            print(f"❌ Error getting raw response: {e}")
+            return {
+                "question": question,
+                "error": str(e),
+                "timestamp": time.time(),
+                "success": False
+            }
 
     def _extract_sql_queries_with_data(self, steps) -> dict:
         """
@@ -945,7 +1036,7 @@ class FabricDataAgentClient:
         return sql_queries
 
 
-def main():
+def main(questions: list, raw_response: bool = False):
     """
     Example usage of the Fabric Data Agent Client.
     """
@@ -969,25 +1060,23 @@ def main():
             data_agent_url=DATA_AGENT_URL
         )
         
-        # Example questions
-        questions = [
-            "What data is available in the lakehouse?",
-            "Show me the top 5 records from any available table",
-            "What are the column names and types in the main tables?"
-        ]
-        
         print("\n" + "="*60)
         print("🤖 Fabric Data Agent Client - Ready!")
         print("="*60)
         
         for i, question in enumerate(questions, 1):
-            print(f"\n📋 Example {i}:")
-            response = client.ask(question)
-            
-            print(f"\n💬 Response:")
-            print("-" * 50)
-            print(response)
-            print("-" * 50)
+            if raw_response == True: #printing (mostly) raw response
+                response = client.get_raw_run_response(question)
+                print(f"\n💬 Response:")
+                print("-" * 50)
+                print(json.dumps(response, indent=2, default=str))
+                print("-" * 50)
+            else:
+                response = client.ask(question)
+                print(f"\n💬 Response:")
+                print("-" * 50)
+                print(response)
+                print("-" * 50)
             
             # Wait between requests
             if i < len(questions):
@@ -1004,4 +1093,10 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Example questions
+    questions = [
+        "What data is available in the lakehouse?",
+        "Show me the top 5 records from any available table",
+        "What are the column names and types in the main tables?"
+    ]
+    main(questions, raw_response=False)
