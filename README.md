@@ -113,6 +113,17 @@ if "sql_queries" in run_details and run_details["sql_queries"]:
     # for i, query in enumerate(run_details['sql_queries'], 1):
     #     print(f"  {i}. {query}")
 ```
+### Getting Raw Run Response
+
+```python
+# Get raw response data for advanced analysis
+response = client.get_raw_run_response("Show me sales data by region")
+
+print(f"\n💬 Response:")
+print("-" * 50)
+print(json.dumps(response, indent=2, default=str))
+print("-" * 50)
+```
 
 ### Running the Examples
 
