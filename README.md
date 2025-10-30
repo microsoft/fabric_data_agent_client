@@ -2,9 +2,11 @@
 
 A standalone Python client for calling Microsoft Fabric Data Agents from outside of the Fabric environment using interactive browser authentication.
 
+⚠️This is in Preview and API can change until GA.
+
 ## Overview
 
-This client enables you to interact with your Microsoft Fabric Data Agents from external applications, scripts, or environments. It handles Azure authentication, token management, and provides a simple interface for asking questions to your data agents.
+This client enables you to interact with your Microsoft Fabric Data Agents from external applications, scripts, or environments. It handles Azure authentication, token management, and provides a simple interface for asking questions to your data agents. Feel free to inspect the example usage for sample client code.
 
 ## Features
 
@@ -84,7 +86,60 @@ response = client.ask("What data is available in the lakehouse?")
 print(response)
 ```
 
-### Getting Detailed Run Information with SQL Query Extraction
+### Thread Management and Conversation Persistence
+
+The Fabric Data Agent Client supports persistent threads, allowing you to maintain conversation context across multiple questions. This is essential for complex analysis workflows where follow-up questions depend on previous context.
+
+#### Creating and Managing Threads
+
+```python
+# Method 1: Let the client manage thread creation
+# Each call creates a new thread (no conversation history) unless you specify an existing thread name
+response1 = client.ask("What data is available?")
+response2 = client.ask("Show me the top 5 records")  # No context from response1
+
+# Method 2: Use named threads for conversation persistence or managing multiple threads
+thread_name = "my_data_analysis_session"
+
+# First question creates the thread
+response1 = client.ask("What data is available?", thread_name=thread_name)
+
+# Follow-up questions maintain context
+response2 = client.ask("Show me the top 5 records", thread_name=thread_name)
+response3 = client.ask("What about the bottom 5?", thread_name=thread_name)
+```
+
+#### Advanced Thread Management
+
+```python
+# Explicitly create or retrieve a thread
+thread = client._get_or_create_new_thread(
+    data_agent_url=client.data_agent_url,
+    thread_name="detailed_analysis_session"
+)
+
+print(f"Thread Name: {thread['name']}")
+print(f"Thread ID: {thread['id']}")
+
+# Use the thread for multiple related questions
+questions = [
+    "What tables are available in the lakehouse?",
+    "Show me the schema of the largest table",
+    "What's the data quality like in that table?"
+]
+
+for question in questions:
+    response = client.ask(question, thread_name="detailed_analysis_session")
+    print(f"Q: {question}")
+    print(f"A: {response}\n")
+```
+
+#### Thread Management Best Practices
+
+**Important**: Your client application is responsible for managing thread names. The client does not automatically persist or remember thread names between application restarts. If you do not delete a thread and ask a question without explicitly creating a new thread, you may continue a conversation on an existing thread so we recommend explicitely creating a new thread via `_get_existing_or_create_thread(data_agent_url=<data_agent_url>,
+    thread_name=<thread_name>)`
+
+### Getting Detailed Run Information with SQL Query Extraction (Experimental - relies on parsing response)
 
 ```python
 # Get detailed run information including steps and SQL queries for lakehouse data sources
@@ -125,6 +180,47 @@ print(json.dumps(response, indent=2, default=str))
 print("-" * 50)
 ```
 
+### Thread Management
+
+The client supports persistent thread management, allowing you to maintain conversation context across multiple interactions:
+
+```python
+# Create or get an existing thread
+thread = client._get_or_create_new_thread(
+    data_agent_url="your-data-agent-url",
+    thread_name="my_analysis_session"  # Your custom thread identifier
+)
+
+print(f"Thread Name: {thread['name']}")
+print(f"Thread ID: {thread['id']}")
+
+# Use the thread for questions - maintains conversation context
+response1 = client.ask("What data is available?", thread_name="my_analysis_session")
+response2 = client.ask("Show me the top 5 records", thread_name="my_analysis_session")
+
+# The second question will have context from the first question
+```
+
+**Important**: To manage threads effectively, your client application must keep track of the `thread_name`. This identifier is used to:
+- Retrieve existing threads for continued conversations
+- Maintain conversation context across multiple questions  
+- Organize different analysis sessions
+
+```python
+# Example: Managing multiple analysis sessions
+sales_thread = "sales_analysis_2024"
+inventory_thread = "inventory_review_q4"
+
+# Sales analysis session
+sales_response = client.ask("Show sales trends", thread_name=sales_thread)
+
+# Separate inventory session
+inventory_response = client.ask("Check inventory levels", thread_name=inventory_thread)
+
+# Continue sales analysis with previous context
+follow_up = client.ask("What about Q3 specifically?", thread_name=sales_thread)
+```
+
 ### Running the Examples
 
 The project includes example scripts you can run:
@@ -145,25 +241,104 @@ python example_usage.py
 
 Initialize the client with your Azure tenant ID and Fabric Data Agent URL.
 
-#### `ask(question: str, timeout: int = 120) -> str`
+**Parameters:**
+- `tenant_id` (str): Your Azure tenant ID
+- `data_agent_url` (str): The published URL of your Fabric Data Agent
 
-Ask a question to the data agent.
+#### `ask(question: str, timeout: int = 120, thread_name: str = None) -> str`
 
-- **question**: The question to ask
-- **timeout**: Maximum time to wait for response in seconds
-- **Returns**: The response from the data agent
+Ask a question to the data agent with optional thread management.
 
-#### `get_run_details(question: str) -> dict`
+**Parameters:**
+- `question` (str): The question to ask
+- `timeout` (int, optional): Maximum time to wait for response in seconds. Default: 120
+- `thread_name` (str, optional): Thread identifier for conversation persistence. Default: None (creates new thread)
+
+**Returns:**
+- `str`: The response from the data agent
+
+**Example:**
+```python
+# Simple question (new thread each time)
+response = client.ask("What data is available?")
+
+# Question with thread persistence
+response = client.ask("Show me sales data", thread_name="sales_analysis")
+followup = client.ask("What about last quarter?", thread_name="sales_analysis")
+```
+
+#### `get_run_details(question: str, thread_name: str = None) -> dict`
 
 Ask a question and return detailed run information including steps, SQL queries, and data previews if lakehouse data source is used.
 
-- **question**: The question to ask
-- **Returns**: Detailed response including:
-  - `run_steps`: Execution steps and metadata  
-  - `sql_queries`: List of SQL queries executed (if lakehouse data source)
-  - `sql_data_previews`: Preview of data returned by queries
-  - `data_retrieval_query`: The specific SQL query that retrieved the main data
-  - `data_retrieval_query_index`: Index of the data retrieval query in the queries list
+**Parameters:**
+- `question` (str): The question to ask
+- `thread_name` (str, optional): Thread identifier for conversation persistence
+
+**Returns:**
+- `dict`: Detailed response including:
+  - `question` (str): The original question asked
+  - `run_status` (str): Status of the run execution
+  - `run_steps` (dict): Execution steps and metadata  
+  - `messages` (dict): Complete message history
+  - `sql_queries` (list): List of SQL queries executed (if lakehouse data source)
+  - `sql_data_previews` (list): Preview of data returned by queries
+  - `data_retrieval_query` (str): The specific SQL query that retrieved the main data
+  - `data_retrieval_query_index` (int): Index of the data retrieval query in the queries list
+  - `timestamp` (float): Unix timestamp when the response was generated
+
+#### `get_raw_run_response(question: str, timeout: int = 120, thread_name: str = None) -> dict`
+
+Ask a question and return the complete raw response including all run details for advanced analysis.
+
+**Parameters:**
+- `question` (str): The question to ask
+- `timeout` (int, optional): Maximum time to wait for response in seconds. Default: 120
+- `thread_name` (str, optional): Thread identifier for conversation persistence
+
+**Returns:**
+- `dict`: Complete raw response including:
+  - `question` (str): The original question
+  - `run` (dict): Raw run object from OpenAI API
+  - `steps` (dict): Raw steps data from OpenAI API
+  - `messages` (dict): Raw messages data from OpenAI API
+  - `timestamp` (float): Unix timestamp when response was generated
+  - `timeout` (int): The timeout value used
+  - `success` (bool): Whether the run completed successfully
+
+#### `_get_or_create_new_thread(data_agent_url: str, thread_name: str = None) -> dict`
+
+**Internal Method**: Get an existing thread or create a new one. This method is primarily for internal use but can be called directly for advanced thread management.
+
+**Parameters:**
+- `data_agent_url` (str): The data agent URL
+- `thread_name` (str, optional): Custom thread identifier. If None, generates a unique name
+
+**Returns:**
+- `dict`: Thread information containing:
+  - `id` (str): The actual thread ID used by the system
+  - `name` (str): The human-readable thread name (extracted from system metadata)
+
+**Important Notes:**
+
+- **Thread Persistence**: The `thread_name` parameter enables conversation context across multiple questions
+- **Client Responsibility**: Your application must track and manage `thread_name` values
+- **Thread Isolation**: Different `thread_name` values create separate conversation contexts
+- **Thread Cleanup**: Threads are automatically managed by the service; no manual cleanup required
+
+**Thread Management Best Practices:**
+```python
+# Use descriptive thread names for different analysis sessions
+sales_analysis = "sales_analysis_2024_q4"
+inventory_review = "inventory_review_december"
+
+# Keep thread names consistent across related questions
+client.ask("Show sales trends", thread_name=sales_analysis)
+client.ask("Compare with last quarter", thread_name=sales_analysis)  # Has context
+
+# Use different thread names for unrelated analysis
+client.ask("Check inventory levels", thread_name=inventory_review)  # Separate context
+```
 
 ## Authentication Flow
 
