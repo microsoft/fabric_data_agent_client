@@ -47,7 +47,6 @@ def main():
         # Example 2: Another simple query
         print("\n📋 Example 2: Raw response")
         response = client.get_raw_run_response("Show me some of the schema of the tables in the lakehouse")
-        print(f"💬 Response: {response}")
         print(f"\n💬 Response:")
         print("-" * 50)
         print(json.dumps(response, indent=2, default=str))

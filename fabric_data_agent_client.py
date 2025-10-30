@@ -19,7 +19,7 @@ Usage:
 import time
 import uuid
 import json
-import os
+import os, requests
 import warnings
 from typing import Optional
 from azure.identity import InteractiveBrowserCredential
@@ -141,22 +141,60 @@ class FabricDataAgentClient:
                 "ActivityId": str(uuid.uuid4())
             }
         )
-    
-    def ask(self, question: str, timeout: int = 120) -> str:
+
+    def _get_existing_or_create_new_thread(self, data_agent_url: str, thread_name = None) -> dict:
+        """
+        Get an existing thread or Create a new thread for the target Fabric Data Agent.
+
+        Args:
+            data_agent_url (str): The URL of the Fabric Data Agent
+            thread_name (str, optional): Name for the new or existing thread. If None, a random name is generated.
+
+        Returns:
+            list: A list containing the ID and name of the created thread or existing thread
+        """
+        if thread_name == None: # if None, generate a random thread name to create a new thread
+            thread_name = f'external-client-thread-{uuid.uuid4()}'
+        else:
+            thread_name = thread_name # use provided thread name to attempt to get existing thread, if not create new thread
+        
+        if "aiskills" in data_agent_url: # future proofing for different url formats
+            base_url = data_agent_url.replace("aiskills", "dataagents").removesuffix("/openai").replace("/aiassistant","/__private/aiassistant")
+        else:
+            base_url = data_agent_url.removesuffix("/openai").replace("/aiassistant","/__private/aiassistant")
+        
+        get_new_thread_url = f'{base_url}/threads/fabric?tag="{thread_name}"'
+
+        headers = {
+            "Authorization": f"Bearer {self.token.token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "ActivityId": str(uuid.uuid4())
+        }
+
+        response = requests.get(get_new_thread_url, headers=headers)
+        response.raise_for_status()
+        thread = response.json()
+        thread["name"] = thread_name #adding thread name to returned object
+
+        return thread
+
+    def ask(self, question: str, timeout: int = 120, thread_name = None) -> str:
         """
         Ask a question to the Fabric Data Agent.
         
         Args:
             question (str): The question to ask
             timeout (int): Maximum time to wait for response in seconds
-            
+            thread_name (str, optional): The name of the thread to use
+
         Returns:
             str: The response from the data agent
         """
         if not question.strip():
             raise ValueError("Question cannot be empty")
         
-        print(f"\n❓ Asking: {question}")
+        print(f"\n Asking: {question}")
         
         try:
             client = self._get_openai_client()
@@ -165,16 +203,20 @@ class FabricDataAgentClient:
             assistant = client.beta.assistants.create(model="not used")
             
             # Create thread and send message
-            thread = client.beta.threads.create()
+            thread = self._get_existing_or_create_new_thread(
+                data_agent_url=self.data_agent_url, 
+                thread_name=thread_name
+                )
+
             client.beta.threads.messages.create(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 role="user",
                 content=question
             )
             
             # Start the run
             run = client.beta.threads.runs.create(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 assistant_id=assistant.id
             )
             
@@ -189,7 +231,7 @@ class FabricDataAgentClient:
                 time.sleep(2)
                 
                 run = client.beta.threads.runs.retrieve(
-                    thread_id=thread.id,
+                    thread_id=thread['id'],
                     run_id=run.id
                 )
             
@@ -197,7 +239,7 @@ class FabricDataAgentClient:
             
             # Get the response messages
             messages = client.beta.threads.messages.list(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 order="asc"
             )
 
@@ -222,10 +264,10 @@ class FabricDataAgentClient:
                         responses.append(str(msg.content))
             
             # Clean up resources
-            try:
-                client.beta.threads.delete(thread_id=thread.id)
-            except Exception as cleanup_error:
-                print(f"⚠️ Cleanup warning: {cleanup_error}")
+            #try:
+            #    client.beta.threads.delete(thread_id=thread['id'])
+            #except Exception as cleanup_error:
+            #    print(f"⚠️ Cleanup warning: {cleanup_error}")
             
             # Return the response
             if responses:
@@ -237,7 +279,7 @@ class FabricDataAgentClient:
             print(f"❌ Error calling data agent: {e}")
             return f"Error: {e}"
     
-    def get_run_details(self, question: str) -> dict:
+    def get_run_details(self, question: str, thread_name=None) -> dict:
         """
         Ask a question and return detailed run information including steps.
         
@@ -254,34 +296,37 @@ class FabricDataAgentClient:
             
             # Create assistant and thread without specifying model or instructions
             assistant = client.beta.assistants.create(model="not used")
-            thread = client.beta.threads.create()
+            thread = self._get_existing_or_create_new_thread(
+                data_agent_url=self.data_agent_url,
+                thread_name=thread_name
+                )
             
             client.beta.threads.messages.create(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 role="user",
                 content=question
             )
             
             # Start and monitor run
             run = client.beta.threads.runs.create(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 assistant_id=assistant.id
             )
             
             while run.status in ["queued", "in_progress"]:
                 print(f"⏳ Status: {run.status}")
                 time.sleep(2)
-                run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
+                run = client.beta.threads.runs.retrieve(thread_id=thread['id'], run_id=run.id)
             
             # Get detailed run steps
             steps = client.beta.threads.runs.steps.list(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 run_id=run.id
             )
             
             # Get messages
             messages = client.beta.threads.messages.list(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 order="asc"
             )
             
@@ -333,7 +378,7 @@ class FabricDataAgentClient:
             
             # Clean up
             try:
-                client.beta.threads.delete(thread_id=thread.id)
+                client.beta.threads.delete(thread_id=thread['id'])
             except Exception as cleanup_error:
                 print(f"⚠️ Warning: Thread cleanup failed: {cleanup_error}")
             
@@ -382,7 +427,7 @@ class FabricDataAgentClient:
             print(f"❌ Error getting run details: {e}")
             return {"error": str(e)}
 
-    def get_raw_run_response(self, question: str, timeout: int = 120) -> dict:
+    def get_raw_run_response(self, question: str, timeout: int = 120, thread_name = None) -> dict:
         """
         Ask a question and return the complete raw response including all run details.
         This is useful when you need to parse or analyze the full response structure.
@@ -404,18 +449,24 @@ class FabricDataAgentClient:
             
             # Create assistant and thread
             assistant = client.beta.assistants.create(model="not used")
-            thread = client.beta.threads.create()
-            
+
+            thread = self._get_existing_or_create_new_thread(
+                data_agent_url=self.data_agent_url,
+                thread_name=thread_name
+                )
+
+            print(f"🧵 Existing or created thread: {thread}")
+
             # Send the question
             client.beta.threads.messages.create(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 role="user",
                 content=question
             )
             
             # Start the run
             run = client.beta.threads.runs.create(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 assistant_id=assistant.id
             )
             
@@ -430,7 +481,7 @@ class FabricDataAgentClient:
                 time.sleep(2)
                 
                 run = client.beta.threads.runs.retrieve(
-                    thread_id=thread.id,
+                    thread_id=thread['id'],
                     run_id=run.id
                 )
             
@@ -438,18 +489,18 @@ class FabricDataAgentClient:
             
             # Get all run details
             steps = client.beta.threads.runs.steps.list(
-                thread_id=thread.id,
+                thread_id=thread['id'],
                 run_id=run.id
             )
             
             messages = client.beta.threads.messages.list(
-                thread_id=thread.id,
-                order="asc"
+                thread_id=thread['id'],
+                order="desc"
             )
             
             # Clean up resources
             try:
-                client.beta.threads.delete(thread_id=thread.id)
+                client.beta.threads.delete(thread_id=thread['id'])
             except Exception as cleanup_error:
                 print(f"⚠️ Cleanup warning: {cleanup_error}")
             
@@ -461,7 +512,8 @@ class FabricDataAgentClient:
                 "messages": messages.model_dump(),
                 "timestamp": time.time(),
                 "timeout": timeout,
-                "success": run.status == "completed"
+                "success": run.status == "completed",
+                "thread": thread
             }
             
         except Exception as e:
@@ -1036,7 +1088,7 @@ class FabricDataAgentClient:
         return sql_queries
 
 
-def main(questions: list, raw_response: bool = False):
+def main(questions: list, raw_response: bool = False, thread_name = None):
     """
     Example usage of the Fabric Data Agent Client.
     """
@@ -1066,13 +1118,16 @@ def main(questions: list, raw_response: bool = False):
         
         for i, question in enumerate(questions, 1):
             if raw_response == True: #printing (mostly) raw response
-                response = client.get_raw_run_response(question)
-                print(f"\n💬 Response:")
+                response = client.get_raw_run_response(question, thread_name=thread_name)
+                print(f"\nConversation in thread '{response['thread']['name']}, thread_id: {response['thread']['id']}':\n" + "-" * 50)
+                for message in response['messages']['data']:
+                    print(f"Role: {message['role']}, Content: \n{message['content'][0]['text']['value']}\n---")
+                print(f"\n💬 json Response:")
                 print("-" * 50)
                 print(json.dumps(response, indent=2, default=str))
                 print("-" * 50)
             else:
-                response = client.ask(question)
+                response = client.ask(question, thread_name=thread_name)
                 print(f"\n💬 Response:")
                 print("-" * 50)
                 print(response)
@@ -1094,9 +1149,11 @@ def main(questions: list, raw_response: bool = False):
 
 if __name__ == "__main__":
     # Example questions
+    
+    thread_name = "example_threadname"
     questions = [
         "What data is available in the lakehouse?",
         "Show me the top 5 records from any available table",
         "What are the column names and types in the main tables?"
     ]
-    main(questions, raw_response=False)
+    main(questions, raw_response=True, thread_name=thread_name)
