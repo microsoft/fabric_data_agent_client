@@ -264,10 +264,10 @@ class FabricDataAgentClient:
                         responses.append(str(msg.content))
             
             # Clean up resources
-            #try:
-            #    client.beta.threads.delete(thread_id=thread['id'])
-            #except Exception as cleanup_error:
-            #    print(f"⚠️ Cleanup warning: {cleanup_error}")
+            try:
+                client.beta.threads.delete(thread_id=thread['id'])
+            except Exception as cleanup_error:
+                print(f"⚠️ Cleanup warning: {cleanup_error}")
             
             # Return the response
             if responses:
