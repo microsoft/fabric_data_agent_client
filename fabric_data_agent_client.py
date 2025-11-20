@@ -22,7 +22,7 @@ import json
 import os, requests
 import warnings
 from typing import Optional
-from azure.identity import InteractiveBrowserCredential
+from azure.identity import InteractiveBrowserCredential, DefaultAzureCredential
 from openai import OpenAI
 
 # Suppress OpenAI Assistants API deprecation warnings
@@ -86,11 +86,23 @@ class FabricDataAgentClient:
             print("A browser window will open for you to sign in to your Microsoft account.")
             
             # Create credential for interactive authentication
-            self.credential = InteractiveBrowserCredential(
-                tenant_id=self.tenant_id,
-                # Optional: specify redirect_uri if needed
+            #self.credential = InteractiveBrowserCredential(
+            #    tenant_id=self.tenant_id,
+            #    # Optional: specify redirect_uri if needed
                 # redirect_uri="http://localhost:8400"
+            #)
+
+            self.credential = DefaultAzureCredential(
+                exclude_shared_token_cache_credential=True,
+                exclude_environment_credential=True,
+                exclude_managed_identity_credential=True,
+                exclude_visual_studio_code_credential=True,
+                exclude_visual_studio_credential=True,
+                exclude_powershell_credential=True,
+                exclude_cli_credential=False,
             )
+            
+
             
             # Get initial token
             self._refresh_token()
