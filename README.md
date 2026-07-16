@@ -5,7 +5,7 @@ A standalone Python client for calling Microsoft Fabric Data Agents from outside
 ⚠️This is in Preview and API can change until GA.
 
 > [!IMPORTANT]
-> The code in this repository uses the OpenAI Assistants API (`beta.assistants`, `beta.threads`, `beta.threads.runs`), which [OpenAI has deprecated](https://platform.openai.com/docs/assistants/migration). The current code continues to work until **August 26, 2026**, but plan to migrate to the [Fabric Data Agent MCP server](https://learn.microsoft.com/en-us/fabric/data-science/data-agent-mcp-server) before this date.
+> The code in this repository uses the OpenAI Assistants API (`beta.assistants`, `beta.threads`, `beta.threads.runs`), which [OpenAI has scheduled to be deprecated](https://platform.openai.com/docs/assistants/migration). The current code continues to work until **August 26, 2026**, but plan to migrate to the [Fabric Data Agent MCP server](https://learn.microsoft.com/en-us/fabric/data-science/data-agent-mcp-server) before this date.
 
 ## Overview
 
