@@ -2,10 +2,10 @@
 
 A standalone Python client for calling Microsoft Fabric Data Agents from outside of the Fabric environment using interactive browser authentication.
 
-⚠️This is in Preview and API can change until GA.
-
 > [!IMPORTANT]
-> The code in this repository uses the OpenAI Assistants API (`beta.assistants`, `beta.threads`, `beta.threads.runs`), which [OpenAI has scheduled to be deprecated](https://platform.openai.com/docs/assistants/migration). The current code continues to work until **August 26, 2026**, but plan to migrate to the [Fabric Data Agent MCP server](https://learn.microsoft.com/en-us/fabric/data-science/data-agent-mcp-server) before this date.
+> **This repository is retired and is no longer maintained.** The sample uses the OpenAI Assistants API (`beta.assistants`, `beta.threads`, `beta.threads.runs`), whose [announced shutdown date](https://platform.openai.com/docs/assistants/migration) was August 26, 2026. Migrate your integrations to the [Fabric data agent Model Context Protocol server](https://learn.microsoft.com/fabric/data-science/data-agent-mcp-server).
+>
+> The instructions and examples below are retained for historical reference only. Don't use this client for new integrations.
 
 ## Overview
 
@@ -416,7 +416,7 @@ This project is provided as-is for educational and development purposes. Please 
 
 ## Contributing
 
-Feel free to submit issues, feature requests, or pull requests to improve this client.
+This retired sample is no longer accepting contributions or feature requests.
 
 ## Changelog
 
